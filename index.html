@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo da Velha Multiplayer</title>
+  <link href="https://cdn.tailwindcss.com" rel="stylesheet">
+</head>
+<body class="bg-white text-gray-800 flex flex-col items-center justify-center min-h-screen">
+  <h1 class="text-3xl font-bold mb-6">Jogo da Velha Multiplayer</h1>
+  <!-- Tela de Autenticação -->
+  <div id="auth" class="w-full max-w-xs">
+    <form id="authForm" class="bg-gray-100 shadow-md rounded px-8 pt-6 pb-8 mb-4">
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="username">Usuário</label>
+        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="username" type="text" placeholder="Usuário">
+      </div>
+      <div class="mb-6">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="password">Senha</label>
+        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" id="password" type="password" placeholder="********">
+      </div>
+      <div class="flex items-center justify-between">
+        <button id="loginBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="button">
+          Entrar / Registrar
+        </button>
+      </div>
+    </form>
+  </div>
+  
+  <!-- Sala de Espera / Página do Jogo -->
+  <div id="gameArea" class="hidden w-full max-w-md">
+    <p class="mb-4">Aguardando outro jogador...</p>
+    <div id="gameBoard" class="grid grid-cols-3 gap-2 mb-4">
+      <!-- 9 células do Jogo da Velha -->
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="0"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="1"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="2"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="3"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="4"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="5"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="6"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="7"></div>
+      <div class="w-20 h-20 border flex items-center justify-center cursor-pointer" data-pos="8"></div>
+    </div>
+    <p id="turnIndicator" class="mb-2"></p>
+    <p id="timer" class="mb-2">10</p>
+  </div>
+
+  <script>
+    // Verifica se há token salvo no localStorage
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('user_id');
+    if(token && userId) {
+      // Usuário autenticado, mostra a sala de espera / jogo
+      document.getElementById('auth').classList.add('hidden');
+      document.getElementById('gameArea').classList.remove('hidden');
+      joinGame(userId);
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', () => {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      if (!username || !password) {
+        alert('Preencha usuário e senha');
+        return;
+      }
+      // Chama o backend para criar usuário / login
+      fetch('https://api.greb.com.br/functions/code_09f451/create_user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if(data.error) {
+          alert(data.error);
+          return;
+        }
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user_id', data.user_id);
+        document.getElementById('auth').classList.add('hidden');
+        document.getElementById('gameArea').classList.remove('hidden');
+        joinGame(data.user_id);
+      });
+    });
+
+    function joinGame(user_id) {
+      fetch('https://api.greb.com.br/functions/code_09f451/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'join_game', user_id })
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Game joined:', data);
+        // Define indicador de turno e outros updates na UI
+        const game = data.game;
+        document.getElementById('turnIndicator').innerText = 'Turno: ' + game.current_turn;
+      });
+    }
+
+    // Exemplo de manipulação do jogo (clicar nas células para realizar uma jogada)
+    document.querySelectorAll('[data-pos]').forEach(cell => {
+      cell.addEventListener('click', () => {
+        const pos = parseInt(cell.getAttribute('data-pos'));
+        const user_id = localStorage.getItem('user_id');
+        // Aqui, simbolizamos o jogador com 'X' ou 'O' de forma fixa para o exemplo
+        const symbol = 'X';
+        // Para o exemplo, precisamos de game_id. Em uma implementação real isto seria armazenado.
+        const game_id = 1; // valor fixo para exemplo
+        fetch('https://api.greb.com.br/functions/code_09f451/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'make_move', game_id, user_id, position: pos, symbol })
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Move made:', data);
+          // Atualiza o tabuleiro conforme o retorno do backend
+          if(data.game && data.game.game_board) {
+            const board = data.game.game_board.split('');
+            document.querySelectorAll('[data-pos]').forEach(cell => {
+              const p = parseInt(cell.getAttribute('data-pos'));
+              cell.innerText = board[p] === '_' ? '' : board[p];
+            });
+            document.getElementById('turnIndicator').innerText = 'Turno: ' + data.game.current_turn;
+          }
+        });
+      });
+    });
+  </script>
+
+  <footer class="mt-6">
+    <a href="admin.html" class="text-blue-500 hover:underline">Painel de Administração</a>
+  </footer>
+</body>
+</html>
